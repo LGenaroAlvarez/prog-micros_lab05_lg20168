@@ -37,11 +37,24 @@ PROCESSOR 16F887
 BINC EQU 0
 BDEC EQU 1
   
-  //--------------------------VARIABLES EN MEMORIA--------------------------------
+//------------------------------------MACROS------------------------------------ 
+  RESET_TMR0 MACRO TMR_VAR
+    BANKSEL TMR0	    ; 
+    MOVLW   TMR_VAR
+    MOVWF   TMR0	    ; 
+    BCF	    T0IF	    ; 
+    ENDM
+ 
+//--------------------------VARIABLES EN MEMORIA--------------------------------
 PSECT udata_shr			; VARIABLES COMPARTIDAS
     W_TEMP:		DS 1	; VARIABLE TEMPORAL PARA REGISTRO W
     STATUS_TEMP:	DS 1	; VARIABLE REMPORAL PARA STATUS
   
+PSECT udata_bank0
+    valor:		DS 1;
+    bandera:		DS 1; 
+    nibbles:		DS 2; 
+    display:		DS 2;   
   
  //-----------------------------Vector reset------------------------------------
  PSECT resVect, class = CODE, abs, delta = 2;
@@ -63,6 +76,9 @@ ISR:
     BTFSC   RBIF		; INT PORTB, SI=1 NO=0
     CALL    INT_IOCRB		; SI -> CORRER SUBRUTINA DE INTERRUPCIÓN
     
+    BTFSC   T0IF
+    CALL INT_TMR0
+    
 POP:
     SWAPF   STATUS_TEMP, W	; INTERCAMBIAR VALOR DE VARIABLE TEMPORAL DE ESTATUS CON W
     MOVWF   STATUS		; CARGAR REGISTRO W A STATUS
@@ -70,6 +86,9 @@ POP:
     SWAPF   W_TEMP, W		; INTERCAMBIAR VARIABLE TEMPORAL DE REGISTRO W CON REGISTRO W
     RETFIE			
 
+PSECT code, delta=2, abs
+ORG 100h			; posición 100h para el codigo    
+    
 //----------------------------INT SUBRUTINAS------------------------------------
 INT_IOCRB:			; SUBRUTINA DE INTERRUPCIÓN EN PORTB
     BANKSEL PORTA		; SELECCIONAR BANCO 0
@@ -80,18 +99,25 @@ INT_IOCRB:			; SUBRUTINA DE INTERRUPCIÓN EN PORTB
     BCF	    RBIF		; LIMPIAR LA BANDERA DE PORTB
     RETURN 
 
-PSECT code, delta=2, abs
-ORG 100h			; posición 100h para el codigo    
+INT_TMR0:
+    CALL SHOW_DISPLAY
+    RESET_TMR0 178		; 
+    RETURN    
     
 //-----------------------------MAIN CONFIG--------------------------------------
 main:
     CALL    IO_CONFIG		; INICIAR CONFIGURACION DE INPUTS/OUTPUTS
     CALL    IOCRB_CONFIG	; INICAR CONFIGURACIÓN DE INTERRUPT ON CHANGE PARA PORTB
+    CALL    CLK_CONFIG
+    CALL    TMR0_CONFIG
     CALL    INT_CONFIG		; INICIAR CONFIGURACIÓN DE INTERRUPCIONES
     BANKSEL PORTA
     
 loop:				; LOOP DE CODIGO GENERICO PARA REALIZAR MIENTRAS NO HAY INTERRUPCION
-    
+    MOVF PORTA, W
+    MOVWF valor
+    CALL NIBBLE_FETCH
+    CALL SET_DISPLAY
     GOTO loop
     
 //------------------------------SUBRUTINAS--------------------------------------  
@@ -104,6 +130,9 @@ IO_CONFIG:			; CONFIGURACION DE PUERTOS
     BSF TRISB, BINC		; DEFINIR PIN 0 PORTB COMO ENTRADA
     BSF TRISB, BDEC		; DEFINIR PIN 1 PORTB COMO ENTRADA
     CLRF TRISA			; DEFINIR PORTA COMO SALIDA
+    CLRF TRISC
+    MOVLW 0XC0
+    MOVWF TRISD
     
     BCF	    OPTION_REG, 7	; LIMPIAR RBPU PARA DESBLOQUEAR EL MODO PULL-UP EN PORTB
     BSF	    WPUB, BINC		; SETEAR WPUB PARA ATVICAR EL PIN 0 DEL PORTB COMO WEAK PULL-UP
@@ -111,6 +140,8 @@ IO_CONFIG:			; CONFIGURACION DE PUERTOS
     
     BANKSEL PORTA		; SELECCIONAR BANCO 0 PARA PORT
     CLRF PORTA			; LIMPIAR VALORES EN PORTA
+    CLRF PORTC
+    CLRF PORTD
     RETURN
     
 IOCRB_CONFIG:			; CONFIGURACION INTERRUPT ON CHANGE
@@ -128,6 +159,96 @@ INT_CONFIG:			; CONFIGURACION INTERRUPCIONES
     BSF GIE			; ACTIVAR INTERRUPCIONES GLOBALES
     BSF RBIE			; ACTIVAR CAMBIO DE INTERRUPCIONES EN PORTB
     BCF RBIF			; LIMPIAR BANDERA DE CAMBIO EN PORTB POR SEGURIDAD
+    BSF T0IE
+    BCF T0IF
+    RETURN
+    
+CLK_CONFIG:
+    BANKSEL OSCCON	    ; cambiamos a banco 1
+    BSF	    OSCCON, 0	    ; SCS -> 1, Usamos reloj interno
+    BSF	    OSCCON, 6
+    BSF	    OSCCON, 5
+    BSF	    OSCCON, 4	    ; IRCF<2:0> -> 111 8MHz
+    RETURN
+    
+TMR0_CONFIG:
+    BANKSEL OPTION_REG	    ; 
+    BCF	    T0CS	    ; 
+    BCF	    PSA		    ; 
+    BSF	    PS2
+    BSF	    PS1
+    BSF	    PS0		    ; 
+    
+    BANKSEL TMR0	    ; 
+    MOVLW   178		    ;
+    MOVWF   TMR0	    ; 
+    BCF	    T0IF	    ; 
+    RETURN 
+
+NIBBLE_FETCH:		    ;
+    MOVLW 0X0F		    ;
+    ANDWF valor, W	    ;
+    MOVWF nibbles	    ;
+    
+    MOVLW 0XF0		    ;
+    ANDWF valor, W	    ;
+    MOVWF nibbles+1	    ;
+    SWAPF nibbles+1, F	    ;
     RETURN
 
+SET_DISPLAY:
+    MOVF nibbles, W
+    CALL HEX_INDEX
+    MOVWF display
+    
+    MOVF nibbles+1, W
+    CALL HEX_INDEX
+    MOVWF display+1
+    RETURN
+
+SHOW_DISPLAY:
+    BCF PORTD, 0
+    BCF PORTD, 1
+    BTFSC bandera, 0
+    GOTO DISPLAY_1
+    
+DISPLAY_0:
+    MOVF display, W
+    MOVWF PORTC
+    BSF PORTD, 1
+    BSF bandera, 0
+RETURN
+    
+DISPLAY_1:
+    MOVF display+1, W
+    MOVWF PORTC
+    BSF PORTD, 0
+    BCF bandera, 0
+RETURN
+    
+//---------------------------INDICE DISPLAY 7SEG--------------------------------
+PSECT HEX_INDEX, class = CODE, abs, delta = 2
+ORG 200h			; POSICIÓN DE LA TABLA
+
+HEX_INDEX:
+    CLRF PCLATH
+    BSF PCLATH, 1		; PCLATH en 01
+    ANDLW 0x0F
+    ADDWF PCL			; PC = PCLATH + PCL | SUMAR W CON PCL PARA INDICAR POSICIÓN EN PC
+    RETLW 00111111B		; 0
+    RETLW 00000110B		; 1
+    RETLW 01011011B		; 2
+    RETLW 01001111B		; 3
+    RETLW 01100110B		; 4
+    RETLW 01101101B		; 5
+    RETLW 01111101B		; 6
+    RETLW 00000111B		; 7
+    RETLW 01111111B		; 8 
+    RETLW 01101111B		; 9
+    RETLW 01110111B		; A
+    RETLW 01111100B		; b
+    RETLW 00111001B		; C
+    RETLW 01011110B		; D
+    RETLW 01111001B		; C
+    RETLW 01110001B		; F    
 END
