@@ -4,7 +4,7 @@
 ; Compilador: pic-as (v2.30), MPLABX V5.40
 ;
 ; Programa: CONTADOR 8 bits INTERRUPCIONES
-; Hardware: PUSHBUTTONS
+; Hardware: PUSHBUTTONS Y DISPLAY 7SEG
 ;
 ; Creado: 21 feb, 2022
 ; Última modificación: 23 feb, 2022
@@ -39,10 +39,10 @@ BDEC EQU 1
   
 //------------------------------------MACROS------------------------------------ 
   RESET_TMR0 MACRO TMR_VAR
-    BANKSEL TMR0	    ; 
-    MOVLW   TMR_VAR
-    MOVWF   TMR0	    ; 
-    BCF	    T0IF	    ; 
+    BANKSEL TMR0		; 
+    MOVLW   TMR_VAR		;
+    MOVWF   TMR0		; 
+    BCF	    T0IF		; 
     ENDM
  
 //--------------------------VARIABLES EN MEMORIA--------------------------------
@@ -51,10 +51,16 @@ PSECT udata_shr			; VARIABLES COMPARTIDAS
     STATUS_TEMP:	DS 1	; VARIABLE REMPORAL PARA STATUS
   
 PSECT udata_bank0
-    valor:		DS 1;
-    bandera:		DS 1; 
-    nibbles:		DS 2; 
-    display:		DS 2;   
+    valor:		DS 1	;
+    bandera:		DS 1	; 
+    nibbles:		DS 2	; 
+    display:		DS 2	;
+    display2:		DS 1	;
+    num:		DS 1	;
+    centenas:		DS 1	;
+    decenas:		DS 1	;
+    unidades:		DS 1	;
+    cont:		DS 2	;
   
  //-----------------------------Vector reset------------------------------------
  PSECT resVect, class = CODE, abs, delta = 2;
@@ -77,7 +83,7 @@ ISR:
     CALL    INT_IOCRB		; SI -> CORRER SUBRUTINA DE INTERRUPCIÓN
     
     BTFSC   T0IF
-    CALL INT_TMR0
+    CALL    INT_TMR0
     
 POP:
     SWAPF   STATUS_TEMP, W	; INTERCAMBIAR VALOR DE VARIABLE TEMPORAL DE ESTATUS CON W
@@ -93,14 +99,13 @@ ORG 100h			; posición 100h para el codigo
 INT_IOCRB:			; SUBRUTINA DE INTERRUPCIÓN EN PORTB
     BANKSEL PORTA		; SELECCIONAR BANCO 0
     BTFSS   PORTB, BINC		; REVISAR SI EL BIT DEL PRIMER BOTON EN RB0 HA CAMBIADO A 0
-    INCF    PORTA		; SI HA CAMBIADO A 0 (HA SIDO PRESIONADO) INCREMENTAR CUENTA EN PORTA
+    INCF    PORTD		; SI HA CAMBIADO A 0 (HA SIDO PRESIONADO) INCREMENTAR CUENTA EN PORTA
     BTFSS   PORTB, BDEC		; REVISAR SI EL BIT DEL SEGUNDO BOTON EN RB1 HA CAMBIADO A 0
-    DECF    PORTA		; SI HA CAMBIADO A 0 (HA SIDO PRESIONADO) DISMINUIR LA CUENTA EN PORTA
+    DECF    PORTD		; SI HA CAMBIADO A 0 (HA SIDO PRESIONADO) DISMINUIR LA CUENTA EN PORTA
     BCF	    RBIF		; LIMPIAR LA BANDERA DE PORTB
     RETURN 
 
 INT_TMR0:
-    CALL SHOW_DISPLAY
     RESET_TMR0 178		; 
     RETURN    
     
@@ -114,10 +119,9 @@ main:
     BANKSEL PORTA
     
 loop:				; LOOP DE CODIGO GENERICO PARA REALIZAR MIENTRAS NO HAY INTERRUPCION
-    MOVF PORTA, W
+    MOVF PORTD, W
     MOVWF valor
-    CALL NIBBLE_FETCH
-    CALL SET_DISPLAY
+    CALL DEC_SPLITTER
     GOTO loop
     
 //------------------------------SUBRUTINAS--------------------------------------  
@@ -130,9 +134,10 @@ IO_CONFIG:			; CONFIGURACION DE PUERTOS
     BSF TRISB, BINC		; DEFINIR PIN 0 PORTB COMO ENTRADA
     BSF TRISB, BDEC		; DEFINIR PIN 1 PORTB COMO ENTRADA
     CLRF TRISA			; DEFINIR PORTA COMO SALIDA
-    CLRF TRISC
-    MOVLW 0XC0
-    MOVWF TRISD
+    CLRF TRISC			; DEFINIR PORTC COMO SALIDA
+    CLRF TRISE
+    MOVLW 0XC0			;
+    MOVWF TRISD			;
     
     BCF	    OPTION_REG, 7	; LIMPIAR RBPU PARA DESBLOQUEAR EL MODO PULL-UP EN PORTB
     BSF	    WPUB, BINC		; SETEAR WPUB PARA ATVICAR EL PIN 0 DEL PORTB COMO WEAK PULL-UP
@@ -140,8 +145,9 @@ IO_CONFIG:			; CONFIGURACION DE PUERTOS
     
     BANKSEL PORTA		; SELECCIONAR BANCO 0 PARA PORT
     CLRF PORTA			; LIMPIAR VALORES EN PORTA
-    CLRF PORTC
-    CLRF PORTD
+    CLRF PORTC			;
+    CLRF PORTD			;
+    CLRF PORTE
     RETURN
     
 IOCRB_CONFIG:			; CONFIGURACION INTERRUPT ON CHANGE
@@ -164,67 +170,55 @@ INT_CONFIG:			; CONFIGURACION INTERRUPCIONES
     RETURN
     
 CLK_CONFIG:
-    BANKSEL OSCCON	    ; cambiamos a banco 1
-    BSF	    OSCCON, 0	    ; SCS -> 1, Usamos reloj interno
-    BSF	    OSCCON, 6
-    BSF	    OSCCON, 5
-    BSF	    OSCCON, 4	    ; IRCF<2:0> -> 111 8MHz
+    BANKSEL OSCCON		; cambiamos a banco 1
+    BSF	    OSCCON, 0		; SCS -> 1, Usamos reloj interno
+    BSF	    OSCCON, 6		;
+    BSF	    OSCCON, 5		;
+    BSF	    OSCCON, 4		; IRCF<2:0> -> 111 8MHz
     RETURN
     
 TMR0_CONFIG:
-    BANKSEL OPTION_REG	    ; 
-    BCF	    T0CS	    ; 
-    BCF	    PSA		    ; 
-    BSF	    PS2
-    BSF	    PS1
-    BSF	    PS0		    ; 
+    BANKSEL OPTION_REG		; 
+    BCF	    T0CS		; 
+    BCF	    PSA			; 
+    BSF	    PS2			;
+    BSF	    PS1			;
+    BSF	    PS0			; 
     
-    BANKSEL TMR0	    ; 
-    MOVLW   178		    ;
-    MOVWF   TMR0	    ; 
-    BCF	    T0IF	    ; 
+    BANKSEL TMR0		; 
+    MOVLW   178			;
+    MOVWF   TMR0		; 
+    BCF	    T0IF		; 
     RETURN 
 
-NIBBLE_FETCH:		    ;
-    MOVLW 0X0F		    ;
-    ANDWF valor, W	    ;
-    MOVWF nibbles	    ;
-    
-    MOVLW 0XF0		    ;
-    ANDWF valor, W	    ;
-    MOVWF nibbles+1	    ;
-    SWAPF nibbles+1, F	    ;
+DEC_SPLITTER:
+    MOVF    valor, W
+    SUBLW   0x64
+    MOVWF   PORTE
+    MOVWF   num
+    INCF    centenas
+    BTFSS   STATUS, 0
+    GOTO    $-5
+    DECF    centenas
+    MOVF    centenas, W
+    MOVWF   PORTA
+    BCF	    STATUS, 0
+    MOVF    num, W
+    ADDLW   0x64
+    MOVWF   PORTE
+    SUBLW   0xA
+    MOVWF   PORTE
+    MOVWF   num
+    INCF    decenas
+    BTFSS   STATUS, 0
+    GOTO    $-5
+    DECF    decenas
+    MOVF    decenas, W
+    MOVWF   PORTC
     RETURN
+    
 
-SET_DISPLAY:
-    MOVF nibbles, W
-    CALL HEX_INDEX
-    MOVWF display
-    
-    MOVF nibbles+1, W
-    CALL HEX_INDEX
-    MOVWF display+1
-    RETURN
 
-SHOW_DISPLAY:
-    BCF PORTD, 0
-    BCF PORTD, 1
-    BTFSC bandera, 0
-    GOTO DISPLAY_1
-    
-DISPLAY_0:
-    MOVF display, W
-    MOVWF PORTC
-    BSF PORTD, 1
-    BSF bandera, 0
-RETURN
-    
-DISPLAY_1:
-    MOVF display+1, W
-    MOVWF PORTC
-    BSF PORTD, 0
-    BCF bandera, 0
-RETURN
     
 //---------------------------INDICE DISPLAY 7SEG--------------------------------
 PSECT HEX_INDEX, class = CODE, abs, delta = 2
