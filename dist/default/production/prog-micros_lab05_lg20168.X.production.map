@@ -5,7 +5,7 @@ Linker command line:
 -W-3 --edf=C:\Program Files\Microchip\xc8\v2.35\pic\dat\en_msgs.txt -cs \
   -h+dist/default/production\prog-micros_lab05_lg20168.X.production.sym \
   --cmf=dist/default/production\prog-micros_lab05_lg20168.X.production.cmf \
-  -z -Q16F887 -oC:\Users\luisg\AppData\Local\Temp\xcAsda8.4 \
+  -z -Q16F887 -oC:\Users\luisg\AppData\Local\Temp\xcAs3lc0.4 \
   -ver=XC8 PIC(R) Assembler \
   -Mdist/default/production/prog-micros_lab05_lg20168.X.production.map -E1 \
   --acfsm=1493 -ACODE=00h-07FFhx4 -ASTRCODE=00h-01FFFh -ASTRING=00h-0FFhx32 \
@@ -30,8 +30,8 @@ build/default/production/main_lab05.o
                 HEX_INDEX                             0        0      214        0       0
                 intVect                               0        0       10        0       0
                 resVect                               0        0        3        0       0
-                code                                  0        0      172        0       0
-                udata_bank0                          20       20        6       20       1
+                code                                  0        0      16B        0       0
+                udata_bank0                          20       20        D       20       1
                 udata_shr                            70       70        2       70       1
 
 TOTAL           Name                               Link     Load   Length     Space
@@ -39,7 +39,7 @@ TOTAL           Name                               Link     Load   Length     Sp
                 HEX_INDEX                             0        0      214         0
                 intVect                               0        0       10         0
                 resVect                               0        0        3         0
-                code                                  0        0      172         0
+                code                                  0        0      16B         0
 
         CLASS   STRCODE        
 
@@ -53,7 +53,7 @@ TOTAL           Name                               Link     Load   Length     Sp
                 udata_shr                            70       70        2         1
 
         CLASS   BANK0          
-                udata_bank0                          20       20        6         1
+                udata_bank0                          20       20        D         1
 
         CLASS   BANK1          
 
@@ -84,14 +84,14 @@ TOTAL           Name                               Link     Load   Length     Sp
 
 SEGMENTS        Name                           Load    Length   Top    Selector   Space  Class     Delta
 
-                udata_bank0                    000020  000006  000026        20       1  BANK0       1
+                udata_bank0                    000020  00000D  00002D        20       1  BANK0       1
                 udata_shr                      000070  000002  000072        70       1  COMMON      1
 
 
 UNUSED ADDRESS RANGES
 
         Name                Unused          Largest block    Delta
-        BANK0            0026-006F             4A           1
+        BANK0            002D-006F             43           1
         BANK1            00A0-00EF             50           1
         BANK2            0110-016F             60           1
         BANK3            0190-01EF             60           1
@@ -101,7 +101,7 @@ UNUSED ADDRESS RANGES
         EEDATA           2100-21FF            100           2
         ENTRY            0214-1FFF            100           2
         IDLOC            2000-2003              4           2
-        RAM              0026-006F             4A           1
+        RAM              002D-006F             43           1
                          00A0-00EF             50
                          0110-016F             60
                          0190-01EF             60
